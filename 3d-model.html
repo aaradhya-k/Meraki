@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Interactive Bamboo Compost Bin Model</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Three.js OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dim-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        /* Custom scrollbar for control panels */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.4); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, 0.7); }
+    </style>
+</head>
+<body class="h-full w-full select-none overflow-hidden bg-slate-950 text-slate-100">
+
+    <!-- WebGL Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- 2D Canvas Overlay for Dimension Lines -->
+    <canvas id="hud-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
+
+    <!-- Overlay Container for 3D Dimension Labels -->
+    <div id="dim-labels-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- Top Navigation & Title Bar -->
+    <header class="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-4 pointer-events-none">
+        <div class="glass-panel rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl pointer-events-auto">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-lg">
+                <i class="fa-solid fa-boxes-packing"></i>
+            </div>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold text-slate-100 tracking-wide flex items-center gap-2">
+                    Community Park Bamboo Compost Bin
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">1.58 m³ Specs</span>
+                </h1>
+                <p class="text-xs text-slate-400">3D CAD Visualization</p>
+            </div>
+        </div>
+
+        <!-- Quick Spec Counters Header -->
+        <div class="hidden md:flex items-center gap-3 glass-panel rounded-2xl px-4 py-2.5 shadow-2xl pointer-events-auto text-xs">
+            <div class="flex items-center gap-2 border-r border-slate-700/60 pr-3">
+                <i class="fa-solid fa-ruler-combined text-amber-400"></i>
+                <div>
+                    <span class="block text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Dimensions</span>
+                    <span class="font-semibold text-slate-200">1.2m × 1.2m × 1.1m</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 border-r border-slate-700/60 pr-3">
+                <i class="fa-solid fa-circle-dot text-cyan-400"></i>
+                <div>
+                    <span class="block text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Aeration</span>
+                    <span class="font-semibold text-cyan-300">Grid Air Holes</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-arrows-up-to-line text-emerald-400"></i>
+                <div>
+                    <span class="block text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Base Lift</span>
+                    <span class="font-semibold text-emerald-300">150 mm Pest Clearance</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar Controls Panel -->
+    <aside class="absolute left-4 top-24 bottom-6 z-20 w-80 max-w-[calc(100vw-2rem)] flex flex-col gap-3 pointer-events-none">
+        <div class="glass-panel rounded-2xl p-4 flex-1 flex flex-col gap-4 overflow-y-auto pointer-events-auto shadow-2xl">
+            
+            <!-- View Mode Presets -->
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center justify-between">
+                    <span><i class="fa-solid fa-camera mr-1.5"></i> Camera Presets</span>
+                </h2>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <button onclick="setCameraView('iso')" class="view-btn px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 text-left font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-cube text-amber-400"></i> 3D Perspective
+                    </button>
+                    <button onclick="setCameraView('front')" class="view-btn px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 text-left font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-vector-square text-cyan-400"></i> Front Elevation
+                    </button>
+                    <button onclick="setCameraView('rear')" class="view-btn px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 text-left font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-door-open text-emerald-400"></i> Rear Access
+                    </button>
+                    <button onclick="setCameraView('top')" class="view-btn px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 text-left font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-emerald-400"></i> Top Down
+                    </button>
+                    <button onclick="setCameraView('cutaway')" class="view-btn px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 text-left font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-eye text-purple-400"></i> Core Inspection
+                    </button>
+                </div>
+            </div>
+
+            <hr class="border-slate-800">
+
+            <!-- Interactive Kinematics -->
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-1.5">
+                    <i class="fa-solid fa-sliders"></i> Interactive Bin Controls
+                </h2>
+
+                <!-- Hinged Lid Control -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center text-xs mb-1.5">
+                        <span class="text-slate-300 font-medium"><i class="fa-solid fa-box-open mr-1 text-amber-400"></i> Top Lid Angle</span>
+                        <span id="lid-angle-text" class="text-amber-400 font-mono">0° (Closed)</span>
+                    </div>
+                    <input id="lid-slider" type="range" min="0" max="100" value="0" class="w-full accent-amber-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+                </div>
+
+                <!-- Front Drop Slats Control -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center text-xs mb-1.5">
+                        <span class="text-slate-300 font-medium"><i class="fa-solid fa-bars-staggered mr-1 text-cyan-400"></i> Front Drop Panels</span>
+                        <span id="slats-text" class="text-cyan-400 font-mono">Fully Closed</span>
+                    </div>
+                    <input id="slats-slider" type="range" min="0" max="100" value="0" class="w-full accent-cyan-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+                    <p class="text-[10px] text-slate-400 mt-1">Simulates removing front zero-gap panels for shovel access.</p>
+                </div>
+
+                <!-- Rear Drop Hatch Control -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center text-xs mb-1.5">
+                        <span class="text-slate-300 font-medium"><i class="fa-solid fa-door-open mr-1 text-emerald-400"></i> Rear Harvest Hatch</span>
+                        <span id="hatch-angle-text" class="text-emerald-400 font-mono">0° (Closed)</span>
+                    </div>
+                    <input id="hatch-slider" type="range" min="0" max="100" value="0" class="w-full accent-emerald-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+                </div>
+
+                <!-- Exploded View Slider -->
+                <div>
+                    <div class="flex justify-between items-center text-xs mb-1.5">
+                        <span class="text-slate-300 font-medium"><i class="fa-solid fa-explosion mr-1 text-rose-400"></i> Exploded View</span>
+                        <span id="exploded-text" class="text-rose-400 font-mono">0%</span>
+                    </div>
+                    <input id="exploded-slider" type="range" min="0" max="100" value="0" class="w-full accent-rose-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+                </div>
+            </div>
+
+            <hr class="border-slate-800">
+
+            <!-- Compost Layering Controls -->
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-1.5">
+                    <i class="fa-solid fa-layer-group"></i> Compost Layers
+                </h2>
+                <div class="flex justify-between items-center text-xs mb-1.5">
+                    <span class="text-slate-300 font-medium">Build Progress</span>
+                    <span id="layer-counter" class="text-purple-400 font-mono">4 / 4</span>
+                </div>
+                <div class="flex gap-2 mb-2">
+                    <button id="btn-remove-layer" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg py-1.5 text-xs font-medium transition disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-minus"></i> Remove</button>
+                    <button id="btn-add-layer" class="flex-1 bg-purple-600/80 hover:bg-purple-500 text-white rounded-lg py-1.5 text-xs font-medium transition disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-plus"></i> Add Layer</button>
+                </div>
+                <div id="layer-desc" class="text-[10px] text-slate-300 leading-relaxed bg-slate-900/80 p-2.5 rounded-lg border border-purple-500/30 min-h-[60px]">
+                    <!-- Layer text injects here -->
+                </div>
+            </div>
+
+            <hr class="border-slate-800">
+
+            <!-- Temperature Sensor Simulation -->
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-rose-400 mb-3 flex items-center gap-1.5">
+                    <i class="fa-solid fa-temperature-half"></i> Smart Temp Sensor
+                </h2>
+                
+                <div class="flex justify-between items-center text-[10px] text-slate-400 mb-1">
+                    <span>Internal Temp</span>
+                    <span id="temp-internal-val" class="font-mono text-rose-300">65°C</span>
+                </div>
+                <input id="temp-internal-slider" type="range" min="15" max="75" value="65" class="w-full accent-rose-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer mb-3">
+
+                <div class="flex justify-between items-center text-[10px] text-slate-400 mb-1">
+                    <span>Ambient (Outside) Temp</span>
+                    <span id="temp-ambient-val" class="font-mono text-blue-300">22°C</span>
+                </div>
+                <input id="temp-ambient-slider" type="range" min="5" max="40" value="22" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer mb-3">
+                
+                <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-700/50 mt-2">
+                    <div id="sensor-status-led" class="w-3 h-3 rounded-full bg-slate-600 shadow-[0_0_5px_rgba(0,0,0,0.5)] transition-all duration-300"></div>
+                    <span id="sensor-status-text" class="text-[10px] font-medium text-slate-400">Heating (Active Composting)</span>
+                </div>
+            </div>
+
+            <hr class="border-slate-800">
+
+            <!-- Display Overlays & Toggles -->
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5 flex items-center gap-1.5">
+                    <i class="fa-solid fa-toggle-on"></i> Display Layers
+                </h2>
+                <div class="space-y-2 text-xs">
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-800/80 cursor-pointer transition">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-ruler text-amber-400"></i> Dimension Overlay</span>
+                        <input id="toggle-dimensions" type="checkbox" checked class="w-4 h-4 rounded accent-amber-500 bg-slate-900 border-slate-700">
+                    </label>
+
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-800/80 cursor-pointer transition">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-seedling text-emerald-400"></i> Compost Core Content</span>
+                        <input id="toggle-compost" type="checkbox" checked class="w-4 h-4 rounded accent-emerald-500 bg-slate-900 border-slate-700">
+                    </label>
+
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-800/80 cursor-pointer transition">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-tree text-green-400"></i> Park Environment</span>
+                        <input id="toggle-env" type="checkbox" checked class="w-4 h-4 rounded accent-green-500 bg-slate-900 border-slate-700">
+                    </label>
+
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-800/80 cursor-pointer transition">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-fire-flame-curved text-orange-400"></i> Heat / Vapour Simulation</span>
+                        <input id="toggle-steam" type="checkbox" checked class="w-4 h-4 rounded accent-orange-500 bg-slate-900 border-slate-700">
+                    </label>
+                </div>
+            </div>
+
+            <hr class="border-slate-800">
+
+            <!-- Resin Bamboo Finish Selector -->
+            <div>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-palette"></i> Bamboo Color Finish
+                </h2>
+                <div class="grid grid-cols-3 gap-2 text-[11px]">
+                    <button onclick="setMaterialFinish('natural')" class="finish-btn p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-amber-500/50 text-amber-200 flex flex-col items-center gap-1">
+                        <span class="w-4 h-4 rounded-full bg-amber-500 border border-amber-300"></span>
+                        <span>Golden Cane</span>
+                    </button>
+                    <button onclick="setMaterialFinish('carbonized')" class="finish-btn p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex flex-col items-center gap-1">
+                        <span class="w-4 h-4 rounded-full bg-lime-700 border border-lime-400"></span>
+                        <span>Fresh Olive</span>
+                    </button>
+                    <button onclick="setMaterialFinish('dark')" class="finish-btn p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex flex-col items-center gap-1">
+                        <span class="w-4 h-4 rounded-full bg-amber-900 border border-amber-700"></span>
+                        <span>Caramel</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </aside>
+
+    <script>
+        // Global Three.js variables
+        let scene, camera, renderer, controls;
+        let binGroup, lidGroup, frontSlatsGroup, backHatchGroup, steamParticles;
+        let compostLayers = [];
+        let dimensionLinesGroup, envGroup;
+        let sensorGroup, sensorLightMat; // Added for sensor
+        let hudCanvas, hudCtx;
+
+        // Interactive States
+        const state = {
+            lidAngle: 0,
+            slatsLift: 0,
+            hatchAngle: 0,
+            explodedFactor: 0,
+            currentLayer: 4,
+            showDimensions: true,
+            showCompost: true,
+            showEnv: true,
+            showSteam: true,
+            materialFinish: 'natural',
+            tempInternal: 65,
+            tempAmbient: 22
+        };
+
+        const finishPalettes = {
+            natural: { main: 0xdfab41, spec: 0x554411, roughness: 0.22, metalness: 0.05 },
+            carbonized: { main: 0x7a8738, spec: 0x223311, roughness: 0.25, metalness: 0.05 },
+            dark: { main: 0x8a4d1f, spec: 0x331100, roughness: 0.28, metalness: 0.08 }
+        };
+
+        let bambooMaterial, bambooBumpTex, wallAlphaTex, floorAlphaTex;
+        let ventilatedBambooMaterial, ventilatedFloorMaterial;
+        let soilMaterial, cornerMaterial, nodeMaterial;
+        let twigMaterial, greensMaterial, brownsMaterial;
+
+        // Initialize Application
+        window.onload = function() {
+            initScene();
+            createProceduralTextures();
+            buildParkEnvironment();
+            buildBambooCompostBin();
+            buildTemperatureSensor(); // Add sensor to scene
+            setupDimensionLines();
+            setupEventListeners();
+            animate();
+        };
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.08);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(2.8, 2.2, 3.2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.05;
+            controls.minDistance = 1.2;
+            controls.maxDistance = 8.0;
+            controls.target.set(0, 0.65, 0);
+            controls.update();
+
+            const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.7);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfff7ed, 1.8);
+            sunLight.position.set(4, 6, 3);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 15;
+            const d = 2.5;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+
+            const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.5);
+            fillLight.position.set(-3, 3, -2);
+            scene.add(fillLight);
+
+            hudCanvas = document.getElementById('hud-canvas');
+            hudCanvas.width = window.innerWidth;
+            hudCanvas.height = window.innerHeight;
+            hudCtx = hudCanvas.getContext('2d');
+        }
+
+        function createProceduralTextures() {
+            // Bamboo Textures
+            const bambooCanvas = document.createElement('canvas');
+            bambooCanvas.width = 1024;
+            bambooCanvas.height = 1024;
+            const ctx = bambooCanvas.getContext('2d');
+            const bumpCanvas = document.createElement('canvas');
+            bumpCanvas.width = 1024;
+            bumpCanvas.height = 1024;
+            const bCtx = bumpCanvas.getContext('2d');
+
+            ctx.fillStyle = '#e8b855'; ctx.fillRect(0, 0, 1024, 1024);
+            bCtx.fillStyle = '#808080'; bCtx.fillRect(0, 0, 1024, 1024);
+
+            const numStalks = 16;
+            const stalkWidth = 1024 / numStalks;
+
+            for (let s = 0; s < numStalks; s++) {
+                const x = s * stalkWidth;
+                const stalkGrad = ctx.createLinearGradient(x, 0, x + stalkWidth, 0);
+                stalkGrad.addColorStop(0, '#a37222'); stalkGrad.addColorStop(0.15, '#d4a13b');
+                stalkGrad.addColorStop(0.5, '#fce38a'); stalkGrad.addColorStop(0.85, '#d4a13b'); stalkGrad.addColorStop(1, '#946317');
+                ctx.fillStyle = stalkGrad; ctx.fillRect(x, 0, stalkWidth, 1024);
+
+                const bumpStalkGrad = bCtx.createLinearGradient(x, 0, x + stalkWidth, 0);
+                bumpStalkGrad.addColorStop(0, '#505050'); bumpStalkGrad.addColorStop(0.5, '#d0d0d0'); bumpStalkGrad.addColorStop(1, '#505050');
+                bCtx.fillStyle = bumpStalkGrad; bCtx.fillRect(x, 0, stalkWidth, 1024);
+
+                ctx.fillStyle = 'rgba(60, 30, 5, 0.6)'; ctx.fillRect(x, 0, 2, 1024);
+                bCtx.fillStyle = '#101010'; bCtx.fillRect(x, 0, 3, 1024);
+
+                for (let f = 0; f < 12; f++) {
+                    const fx = x + Math.random() * (stalkWidth - 2);
+                    const alpha = 0.05 + Math.random() * 0.12;
+                    ctx.fillStyle = Math.random() > 0.4 ? `rgba(100, 55, 10, ${alpha})` : `rgba(255, 245, 210, ${alpha * 1.5})`;
+                    ctx.fillRect(fx, 0, Math.random() * 1.5 + 0.5, 1024);
+                }
+
+                const nodeYPositions = [160, 420, 680, 930];
+                nodeYPositions.forEach(nodeY => {
+                    const y = nodeY + (s % 3) * 12;
+                    const nodeGrad = ctx.createLinearGradient(0, y - 14, 0, y + 14);
+                    nodeGrad.addColorStop(0, 'rgba(0,0,0,0)'); nodeGrad.addColorStop(0.25, 'rgba(110, 75, 20, 0.4)');
+                    nodeGrad.addColorStop(0.5, 'rgba(45, 25, 5, 0.85)'); nodeGrad.addColorStop(0.75, 'rgba(110, 75, 20, 0.4)');
+                    nodeGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = nodeGrad; ctx.fillRect(x, y - 14, stalkWidth, 28);
+
+                    const nodeBump = bCtx.createLinearGradient(0, y - 12, 0, y + 12);
+                    nodeBump.addColorStop(0, '#808080'); nodeBump.addColorStop(0.5, '#ffffff'); nodeBump.addColorStop(1, '#808080');
+                    bCtx.fillStyle = nodeBump; bCtx.fillRect(x, y - 12, stalkWidth, 24);
+                });
+            }
+
+            bambooTex = new THREE.CanvasTexture(bambooCanvas);
+            bambooTex.wrapS = THREE.RepeatWrapping; bambooTex.wrapT = THREE.RepeatWrapping;
+            bambooBumpTex = new THREE.CanvasTexture(bumpCanvas);
+            bambooBumpTex.wrapS = THREE.RepeatWrapping; bambooBumpTex.wrapT = THREE.RepeatWrapping;
+
+            // Wall Alpha Holes
+            const alphaCanvas = document.createElement('canvas');
+            alphaCanvas.width = 512; alphaCanvas.height = 512;
+            const aCtx = alphaCanvas.getContext('2d');
+            aCtx.fillStyle = '#ffffff'; aCtx.fillRect(0, 0, 512, 512);
+            aCtx.fillStyle = '#000000';
+            for (let r = 1; r <= 2; r++) {
+                for (let c = 1; c <= 4; c++) {
+                    aCtx.beginPath(); aCtx.arc(c * (512 / 5), r * (512 / 3), 18, 0, Math.PI * 2); aCtx.fill();
+                }
+            }
+            wallAlphaTex = new THREE.CanvasTexture(alphaCanvas);
+            wallAlphaTex.wrapS = THREE.RepeatWrapping; wallAlphaTex.wrapT = THREE.RepeatWrapping;
+
+            // Floor Alpha Holes
+            const floorAlphaCanvas = document.createElement('canvas');
+            floorAlphaCanvas.width = 512; floorAlphaCanvas.height = 512;
+            const fCtx = floorAlphaCanvas.getContext('2d');
+            fCtx.fillStyle = '#ffffff'; fCtx.fillRect(0, 0, 512, 512);
+            fCtx.fillStyle = '#000000';
+            // Increased grid density and reduced radius for tiny water drainage holes
+            for (let r = 1; r <= 20; r++) {
+                for (let c = 1; c <= 20; c++) {
+                    fCtx.beginPath(); fCtx.arc(c * (512 / 21), r * (512 / 21), 3, 0, Math.PI * 2); fCtx.fill();
+                }
+            }
+            floorAlphaTex = new THREE.CanvasTexture(floorAlphaCanvas);
+            floorAlphaTex.wrapS = THREE.RepeatWrapping; floorAlphaTex.wrapT = THREE.RepeatWrapping;
+
+            // Materials
+            bambooMaterial = new THREE.MeshStandardMaterial({
+                map: bambooTex, bumpMap: bambooBumpTex, bumpScale: 0.015,
+                color: finishPalettes.natural.main, roughness: finishPalettes.natural.roughness, metalness: finishPalettes.natural.metalness
+            });
+
+            cornerMaterial = new THREE.MeshStandardMaterial({ map: bambooTex, bumpMap: bambooBumpTex, bumpScale: 0.012, color: 0xc49333, roughness: 0.25 });
+            nodeMaterial = new THREE.MeshStandardMaterial({ map: bambooTex, color: 0x8a5b1b, roughness: 0.35 });
+
+            ventilatedBambooMaterial = bambooMaterial.clone();
+            ventilatedBambooMaterial.alphaMap = wallAlphaTex; ventilatedBambooMaterial.transparent = true; ventilatedBambooMaterial.alphaTest = 0.3;
+
+            ventilatedFloorMaterial = bambooMaterial.clone();
+            ventilatedFloorMaterial.alphaMap = floorAlphaTex; ventilatedFloorMaterial.transparent = true; ventilatedFloorMaterial.alphaTest = 0.3;
+
+            // Compost Textures (4 layers)
+            // L1: Twigs
+            const twC = document.createElement('canvas'); twC.width = 256; twC.height = 256; const twCtx = twC.getContext('2d');
+            twCtx.fillStyle = '#b48a45'; twCtx.fillRect(0, 0, 256, 256);
+            for(let i=0; i<300; i++) {
+                twCtx.strokeStyle = Math.random() > 0.5 ? '#8b6933' : '#d4b375'; twCtx.lineWidth = Math.random() * 3 + 1;
+                twCtx.beginPath(); twCtx.moveTo(Math.random()*256, Math.random()*256); twCtx.lineTo(Math.random()*256, Math.random()*256); twCtx.stroke();
+            }
+            twigMaterial = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(twC), roughness: 0.9 });
+
+            // L2: Greens
+            const grC = document.createElement('canvas'); grC.width = 256; grC.height = 256; const grCtx = grC.getContext('2d');
+            grCtx.fillStyle = '#4ade80'; grCtx.fillRect(0, 0, 256, 256);
+            for(let i=0; i<400; i++) {
+                grCtx.fillStyle = Math.random() > 0.5 ? '#22c55e' : '#16a34a';
+                grCtx.beginPath(); grCtx.arc(Math.random()*256, Math.random()*256, Math.random()*6+2, 0, Math.PI*2); grCtx.fill();
+            }
+            greensMaterial = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(grC), roughness: 0.8 });
+
+            // L3: Browns
+            const brC = document.createElement('canvas'); brC.width = 256; brC.height = 256; const brCtx = brC.getContext('2d');
+            brCtx.fillStyle = '#a16207'; brCtx.fillRect(0, 0, 256, 256);
+            for(let i=0; i<400; i++) {
+                brCtx.fillStyle = Math.random() > 0.5 ? '#713f12' : '#ca8a04';
+                brCtx.fillRect(Math.random()*256, Math.random()*256, Math.random()*12+4, Math.random()*8+2);
+            }
+            brownsMaterial = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(brC), roughness: 0.95 });
+
+            // L4: Soil/Accelerator
+            const slC = document.createElement('canvas'); slC.width = 256; slC.height = 256; const slCtx = slC.getContext('2d');
+            slCtx.fillStyle = '#26180f'; slCtx.fillRect(0, 0, 256, 256);
+            for(let i=0; i<1500; i++) {
+                slCtx.fillStyle = Math.random() > 0.5 ? '#180d07' : '#3d2919';
+                slCtx.beginPath(); slCtx.arc(Math.random()*256, Math.random()*256, Math.random()*2+0.5, 0, Math.PI*2); slCtx.fill();
+            }
+            soilMaterial = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(slC), roughness: 0.95 });
+        }
+
+        function buildParkEnvironment() {
+            envGroup = new THREE.Group();
+            const grassGeo = new THREE.PlaneGeometry(16, 16);
+            const grassMat = new THREE.MeshStandardMaterial({ color: 0x1e3a1e, roughness: 0.9 });
+            const grass = new THREE.Mesh(grassGeo, grassMat);
+            grass.rotation.x = -Math.PI / 2; grass.receiveShadow = true; envGroup.add(grass);
+            scene.add(envGroup);
+        }
+
+        function buildBambooCompostBin() {
+            binGroup = new THREE.Group();
+
+            const totalWidth = 1.2; const totalDepth = 1.2; const legHeight = 0.15;
+            const postRadius = 0.045; const slatThickness = 0.04; const panelHeight = 0.095;
+            const numPanels = 10; const numHatchPanels = 4;
+            const halfW = totalWidth / 2; const halfD = totalDepth / 2;
+
+            // 1. Posts
+            const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, 1.1, 16);
+            const nodeRingGeo = new THREE.TorusGeometry(postRadius * 1.12, 0.012, 8, 16);
+            const cornerPositions = [
+                [-halfW + postRadius, 1.1/2, -halfD + postRadius], [ halfW - postRadius, 1.1/2, -halfD + postRadius],
+                [-halfW + postRadius, 1.1/2,  halfD - postRadius], [ halfW - postRadius, 1.1/2,  halfD - postRadius]
+            ];
+
+            cornerPositions.forEach(pos => {
+                const post = new THREE.Mesh(postGeo, cornerMaterial);
+                post.position.set(...pos); post.castShadow = true; post.receiveShadow = true; binGroup.add(post);
+                [0.2, 0.45, 0.7, 0.95].forEach(nodeY => {
+                    const nodeRing = new THREE.Mesh(nodeRingGeo, nodeMaterial);
+                    nodeRing.position.set(pos[0], nodeY, pos[2]); nodeRing.rotation.x = Math.PI/2; binGroup.add(nodeRing);
+                });
+            });
+
+            // 2. Base
+            // Expanded base dimensions to perfectly cover all edge spaces and slightly intersect with walls
+            const baseFrameGeo = new THREE.BoxGeometry(totalWidth - 0.06, 0.04, totalDepth - 0.06);
+            const baseMesh = new THREE.Mesh(baseFrameGeo, ventilatedFloorMaterial);
+            baseMesh.position.set(0, legHeight + 0.02, 0);
+            baseMesh.receiveShadow = true;
+            baseMesh.userData = { origPos: baseMesh.position.clone(), dir: new THREE.Vector3(0, -1, 0) };
+            binGroup.add(baseMesh);
+
+            // 3. Side Walls
+            const sidePanelGeo = new THREE.BoxGeometry(slatThickness, panelHeight, totalDepth - postRadius*2);
+            for (let i = 0; i < numPanels; i++) {
+                const yPos = legHeight + 0.0475 + i * panelHeight;
+                if (yPos > 1.1) break;
+                
+                const leftPanel = new THREE.Mesh(sidePanelGeo, ventilatedBambooMaterial);
+                leftPanel.position.set(-halfW + slatThickness/2, yPos, 0); leftPanel.castShadow = true;
+                leftPanel.userData = { origPos: leftPanel.position.clone(), dir: new THREE.Vector3(-1, 0, 0) };
+                binGroup.add(leftPanel);
+
+                const rightPanel = new THREE.Mesh(sidePanelGeo, ventilatedBambooMaterial);
+                rightPanel.position.set(halfW - slatThickness/2, yPos, 0); rightPanel.castShadow = true;
+                rightPanel.userData = { origPos: rightPanel.position.clone(), dir: new THREE.Vector3(1, 0, 0) };
+                binGroup.add(rightPanel);
+            }
+
+            // 4. Back Wall & Hinged Hatch
+            backHatchGroup = new THREE.Group();
+            backHatchGroup.position.set(0, legHeight, -halfD + slatThickness/2);
+            backHatchGroup.userData = { origPos: backHatchGroup.position.clone(), dir: new THREE.Vector3(0, 0, -1) };
+            binGroup.add(backHatchGroup);
+
+            const backPanelGeo = new THREE.BoxGeometry(totalWidth - postRadius*2, panelHeight, slatThickness);
+            for (let i = 0; i < numPanels; i++) {
+                const yPos = legHeight + 0.0475 + i * panelHeight;
+                if (yPos > 1.1) break;
+                const backPanel = new THREE.Mesh(backPanelGeo, ventilatedBambooMaterial);
+                backPanel.castShadow = true; backPanel.receiveShadow = true;
+
+                if (i < numHatchPanels) {
+                    backPanel.position.set(0, 0.0475 + i * panelHeight, 0);
+                    backHatchGroup.add(backPanel);
+                } else {
+                    backPanel.position.set(0, yPos, -halfD + slatThickness/2);
+                    backPanel.userData = { origPos: backPanel.position.clone(), dir: new THREE.Vector3(0, 0, -1) };
+                    binGroup.add(backPanel);
+                }
+            }
+
+            const rearHandleGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.35, 12);
+            const rearHandleMesh = new THREE.Mesh(rearHandleGeo, cornerMaterial);
+            rearHandleMesh.rotation.z = Math.PI / 2;
+            rearHandleMesh.position.set(0, numHatchPanels * panelHeight - 0.04, -slatThickness/2 - 0.02);
+            backHatchGroup.add(rearHandleMesh);
+            [-0.1, 0.1].forEach(xOff => {
+                const hNode = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.008, 8, 12), nodeMaterial);
+                hNode.position.set(xOff, numHatchPanels * panelHeight - 0.04, -slatThickness/2 - 0.02);
+                hNode.rotation.y = Math.PI / 2;
+                backHatchGroup.add(hNode);
+            });
+
+            // 5. Front Wall
+            frontSlatsGroup = new THREE.Group();
+            const frontPanelGeo = new THREE.BoxGeometry(totalWidth - postRadius*2.2, panelHeight, slatThickness);
+            for (let i = 0; i < numPanels; i++) {
+                const yPos = legHeight + 0.0475 + i * panelHeight;
+                if (yPos > 1.1) break;
+                const fPanel = new THREE.Mesh(frontPanelGeo, ventilatedBambooMaterial);
+                fPanel.position.set(0, yPos, halfD - slatThickness/2); fPanel.castShadow = true;
+                fPanel.userData = { index: i, baseY: yPos }; frontSlatsGroup.add(fPanel);
+            }
+            binGroup.add(frontSlatsGroup);
+
+            // 6. Top Lid
+            lidGroup = new THREE.Group();
+            lidGroup.position.set(0, 1.1, -halfD + slatThickness/2);
+            const lidTopMesh = new THREE.Mesh(new THREE.BoxGeometry(totalWidth + 0.04, 0.03, totalDepth + 0.04), bambooMaterial);
+            lidTopMesh.position.set(0, 0.015, (totalDepth + 0.04) / 2); lidTopMesh.castShadow = true;
+            lidGroup.add(lidTopMesh);
+
+            const handleMesh = new THREE.Mesh(rearHandleGeo, cornerMaterial);
+            handleMesh.rotation.z = Math.PI / 2; handleMesh.position.set(0, 0.05, totalDepth + 0.04 - 0.08);
+            lidGroup.add(handleMesh);
+            [-0.1, 0.1].forEach(xOff => {
+                const hNode = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.008, 8, 12), nodeMaterial);
+                hNode.position.set(xOff, 0.05, totalDepth + 0.04 - 0.08); hNode.rotation.y = Math.PI / 2; lidGroup.add(hNode);
+            });
+            binGroup.add(lidGroup);
+
+            // 7. Compost Layers (4 Distinct Meshes)
+            const layerConfigs = [
+                { height: 0.15, material: twigMaterial },
+                { height: 0.10, material: greensMaterial },
+                { height: 0.15, material: brownsMaterial },
+                { height: 0.05, material: soilMaterial }
+            ];
+
+            let currentY = legHeight + 0.04;
+            compostLayers = [];
+            layerConfigs.forEach((config) => {
+                const geo = new THREE.BoxGeometry(totalWidth - 0.12, config.height, totalDepth - 0.12);
+                geo.translate(0, config.height / 2, 0); // Shift origin to bottom for upward scaling animation
+                const lMesh = new THREE.Mesh(geo, config.material);
+                lMesh.position.set(0, currentY, 0);
+                lMesh.scale.y = 0; // Start scaled down (hidden)
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                binGroup.add(lMesh); compostLayers.push(lMesh);
+                currentY += config.height;
+            });
+
+            // 8. Steam Particles
+            const particleCount = 45;
+            const pGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount; i++) {
+                positions[i*3] = (Math.random() - 0.5) * 0.8;
+                positions[i*3+1] = 0.8 + Math.random() * 0.5;
+                positions[i*3+2] = (Math.random() - 0.5) * 0.8;
+            }
+            pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            steamParticles = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0xffedd5, size: 0.06, transparent: true, opacity: 0.35 }));
+            binGroup.add(steamParticles);
+
+            scene.add(binGroup);
+        }
+
+        function buildTemperatureSensor() {
+            sensorGroup = new THREE.Group();
+            
+            // Positioning on the right side of the bin, slightly lowered
+            const posX = 0.6 + 0.02; // Just outside the right panel
+            const posY = 0.6;        // Mid-height
+            const posZ = 0;          // Center depth
+            
+            sensorGroup.position.set(posX, posY, posZ);
+
+            // 1. The external control box (mounted outside)
+            const boxGeo = new THREE.BoxGeometry(0.06, 0.1, 0.08);
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6, metalness: 0.2 });
+            const sensorBox = new THREE.Mesh(boxGeo, boxMat);
+            sensorGroup.add(sensorBox);
+
+            // 2. The Indicator Light (LED) on the box
+            const ledGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.01, 16);
+            // We use a separate material so we can change its emissive color later
+            sensorLightMat = new THREE.MeshStandardMaterial({ 
+                color: 0x111111, 
+                emissive: 0x000000,
+                roughness: 0.2
+            });
+            const ledMesh = new THREE.Mesh(ledGeo, sensorLightMat);
+            ledMesh.rotation.z = Math.PI / 2;
+            ledMesh.position.set(0.03, 0.02, 0); // Stick out the right side of the box
+            sensorGroup.add(ledMesh);
+
+            // 3. The long metal probe going INTO the compost
+            const probeGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.5, 8);
+            const probeMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.3, metalness: 0.8 });
+            const probe = new THREE.Mesh(probeGeo, probeMat);
+            probe.rotation.z = Math.PI / 2;
+            probe.position.set(-0.25, 0, 0); // Extend inward (negative X)
+            sensorGroup.add(probe);
+            
+            // Ensure sensor explodes outward with the side panel it's attached to
+            sensorGroup.userData = { origPos: sensorGroup.position.clone(), dir: new THREE.Vector3(1, 0, 0) };
+
+            binGroup.add(sensorGroup);
+        }
+
+        const dimCallouts = [];
+        function setupDimensionLines() {
+            dimensionLinesGroup = new THREE.Group();
+            
+            // Reverting to the native THREE.Line with LineBasicMaterial, 
+            // but noting that WebGL limits max linewidth to 1 on most modern platforms.
+            // Using a darker, more prominent color to ensure it stands out.
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0f172a }); // Very dark slate
+            
+            function createDimLine(p1, p2) {
+                dimensionLinesGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1, p2]), lineMaterial));
+            }
+
+            createDimLine(new THREE.Vector3(-0.6, 0.02, 0.7), new THREE.Vector3(0.6, 0.02, 0.7));
+            dimCallouts.push({ pos: new THREE.Vector3(0, 0.02, 0.7), text: '1.2 m Length' });
+            createDimLine(new THREE.Vector3(0.7, 0, 0.6), new THREE.Vector3(0.7, 1.1, 0.6));
+            dimCallouts.push({ pos: new THREE.Vector3(0.7, 0.55, 0.6), text: '1.1 m Height' });
+            createDimLine(new THREE.Vector3(-0.7, 0, -0.6), new THREE.Vector3(-0.7, 0, 0.6));
+            dimCallouts.push({ pos: new THREE.Vector3(-0.7, 0, 0), text: '1.2 m Width' });
+            createDimLine(new THREE.Vector3(0.65, 0, 0), new THREE.Vector3(0.65, 0.15, 0));
+            dimCallouts.push({ pos: new THREE.Vector3(0.65, 0.075, 0), text: '150 mm Pest Clearance' });
+
+            scene.add(dimensionLinesGroup);
+            let container = document.getElementById('dim-labels-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'dim-labels-container';
+                container.className = 'absolute inset-0 pointer-events-none z-10 overflow-hidden';
+                document.body.appendChild(container);
+            }
+            dimCallouts.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'dim-label bg-amber-500/90 text-slate-950 font-bold text-[11px] px-2 py-0.5 rounded-full shadow-lg border border-amber-300';
+                div.id = `dim-tag-${index}`;
+                div.innerText = item.text;
+                container.appendChild(div);
+            });
+        }
+
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (hudCanvas) { hudCanvas.width = window.innerWidth; hudCanvas.height = window.innerHeight; }
+        }
+
+        function setCameraView(view) {
+            if (!camera || !controls) return;
+            switch(view) {
+                case 'iso': camera.position.set(2.8, 2.2, 3.2); controls.target.set(0, 0.65, 0); break;
+                case 'front': camera.position.set(0, 0.65, 3.5); controls.target.set(0, 0.65, 0); break;
+                case 'rear': camera.position.set(0, 0.65, -3.5); controls.target.set(0, 0.65, 0); break;
+                case 'top': camera.position.set(0, 4.0, 0.01); controls.target.set(0, 0.65, 0); break;
+                case 'cutaway':
+                    camera.position.set(1.5, 1.8, 1.5); controls.target.set(0, 0.4, 0);
+                    state.slatsLift = 0.6;
+                    const slatsSlider = document.getElementById('slats-slider');
+                    if (slatsSlider) slatsSlider.value = 60;
+                    const slatsText = document.getElementById('slats-text');
+                    if (slatsText) slatsText.innerText = '6 Panels Lifted';
+                    break;
+            }
+            controls.update();
+        }
+
+        function setMaterialFinish(finishKey) {
+            if (!finishPalettes[finishKey] || !bambooMaterial) return;
+            state.materialFinish = finishKey;
+            const pal = finishPalettes[finishKey];
+            bambooMaterial.color.setHex(pal.main);
+            bambooMaterial.roughness = pal.roughness;
+            bambooMaterial.metalness = pal.metalness;
+            if (cornerMaterial) cornerMaterial.color.setHex(pal.main);
+            if (ventilatedBambooMaterial) ventilatedBambooMaterial.color.setHex(pal.main);
+            if (ventilatedFloorMaterial) ventilatedFloorMaterial.color.setHex(pal.main);
+        }
+
+        const layerDescriptions = [
+            "<strong>Empty Bin</strong><br>Start building your compost pile from the bottom up!",
+            "<strong>Layer 1: The Twig Base</strong><br>10 to 15-centimetre layer of twigs, straw, or small branches to ensure drainage and airflow.",
+            "<strong>Layer 2: The Greens</strong><br>5 to 10-centimetre layer of wet, fresh kitchen and garden waste (veg scraps, fruit peels, fresh grass).",
+            "<strong>Layer 3: The Browns (Carbon)</strong><br>10 to 15-centimetre layer of dry, crunchy materials like dry leaves, shredded cardboard, and sawdust.",
+            "<strong>Layer 4: The Accelerator</strong><br>A thin layer of garden soil, finished compost, or a splash of water to introduce healthy bacteria."
+        ];
+
+        function updateLayerUI() {
+            const btnAdd = document.getElementById('btn-add-layer');
+            const btnRemove = document.getElementById('btn-remove-layer');
+            const counter = document.getElementById('layer-counter');
+            const desc = document.getElementById('layer-desc');
+
+            if(btnAdd) btnAdd.disabled = state.currentLayer >= 4;
+            if(btnRemove) btnRemove.disabled = state.currentLayer <= 0;
+            if(counter) counter.innerText = `${state.currentLayer} / 4`;
+            if(desc) desc.innerHTML = layerDescriptions[state.currentLayer];
+        }
+        
+        function updateSensorSimulation() {
+            const tempInternal = state.tempInternal;
+            const tempAmbient = state.tempAmbient;
+            
+            const ledUI = document.getElementById('sensor-status-led');
+            const textUI = document.getElementById('sensor-status-text');
+            
+            // Define a threshold. If internal temp is within +/- 2 degrees of ambient, it's "done".
+            const isFinished = Math.abs(tempInternal - tempAmbient) <= 2;
+            
+            if (isFinished) {
+                // UI Update
+                if(ledUI) {
+                    ledUI.classList.remove('bg-slate-600', 'bg-rose-500', 'shadow-[0_0_8px_rgba(244,63,94,0.6)]');
+                    ledUI.classList.add('bg-emerald-500', 'shadow-[0_0_8px_rgba(16,185,129,0.8)]');
+                }
+                if(textUI) {
+                    textUI.innerText = "Compost Ready (Cooled)";
+                    textUI.classList.remove('text-slate-400', 'text-rose-400');
+                    textUI.classList.add('text-emerald-400');
+                }
+                
+                // 3D Model Update
+                if (sensorLightMat) {
+                    sensorLightMat.color.setHex(0x10b981); // Emerald Green
+                    sensorLightMat.emissive.setHex(0x059669);
+                    sensorLightMat.emissiveIntensity = 2.0;
+                }
+                
+                // Automatically turn off steam when cooled
+                state.showSteam = false;
+                const steamToggle = document.getElementById('toggle-steam');
+                if (steamToggle) steamToggle.checked = false;
+
+            } else {
+                // UI Update
+                if(ledUI) {
+                    ledUI.classList.remove('bg-emerald-500', 'shadow-[0_0_8px_rgba(16,185,129,0.8)]');
+                    // Add a subtle red pulse for active heating
+                    ledUI.classList.add('bg-rose-500', 'shadow-[0_0_8px_rgba(244,63,94,0.6)]');
+                }
+                if(textUI) {
+                    textUI.innerText = "Heating (Active Composting)";
+                    textUI.classList.remove('text-emerald-400');
+                    textUI.classList.add('text-rose-400');
+                }
+                
+                // 3D Model Update (Turn LED off/dim red)
+                if (sensorLightMat) {
+                    sensorLightMat.color.setHex(0x4c0519); // Dark red
+                    sensorLightMat.emissive.setHex(0xe11d48);
+                    sensorLightMat.emissiveIntensity = 0.5;
+                }
+                
+                // Allow steam again based on the checkbox
+                const steamToggle = document.getElementById('toggle-steam');
+                if (steamToggle) state.showSteam = steamToggle.checked;
+            }
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', onWindowResize);
+
+            document.getElementById('lid-slider').addEventListener('input', (e) => {
+                state.lidAngle = (e.target.value / 100) * (Math.PI * 0.65);
+                document.getElementById('lid-angle-text').innerText = `${Math.round((e.target.value / 100) * 117)}°`;
+            });
+
+            document.getElementById('slats-slider').addEventListener('input', (e) => {
+                state.slatsLift = e.target.value / 100;
+                const totalCount = frontSlatsGroup ? frontSlatsGroup.children.length : 10;
+                const removedCount = Math.floor(state.slatsLift * totalCount);
+                document.getElementById('slats-text').innerText = removedCount === 0 ? 'Fully Closed' : `${removedCount} Panels Lifted`;
+            });
+
+            document.getElementById('hatch-slider').addEventListener('input', (e) => {
+                state.hatchAngle = (e.target.value / 100) * (Math.PI * 0.65);
+                document.getElementById('hatch-angle-text').innerText = `${Math.round((e.target.value / 100) * 117)}°`;
+            });
+
+            document.getElementById('exploded-slider').addEventListener('input', (e) => {
+                state.explodedFactor = e.target.value / 100;
+                document.getElementById('exploded-text').innerText = `${Math.round(state.explodedFactor * 100)}%`;
+            });
+            
+            // Sensor Sliders
+            document.getElementById('temp-internal-slider').addEventListener('input', (e) => {
+                state.tempInternal = parseInt(e.target.value);
+                document.getElementById('temp-internal-val').innerText = `${state.tempInternal}°C`;
+                updateSensorSimulation();
+            });
+            
+            document.getElementById('temp-ambient-slider').addEventListener('input', (e) => {
+                state.tempAmbient = parseInt(e.target.value);
+                document.getElementById('temp-ambient-val').innerText = `${state.tempAmbient}°C`;
+                updateSensorSimulation();
+            });
+
+            document.getElementById('toggle-dimensions').addEventListener('change', (e) => {
+                state.showDimensions = e.target.checked;
+                if (dimensionLinesGroup) dimensionLinesGroup.visible = state.showDimensions;
+                const dimContainer = document.getElementById('dim-labels-container');
+                if (dimContainer) dimContainer.style.display = state.showDimensions ? 'block' : 'none';
+            });
+
+            document.getElementById('toggle-compost').addEventListener('change', (e) => { state.showCompost = e.target.checked; });
+            document.getElementById('toggle-env').addEventListener('change', (e) => { state.showEnv = e.target.checked; });
+            document.getElementById('toggle-steam').addEventListener('change', (e) => { state.showSteam = e.target.checked; });
+
+            document.getElementById('btn-add-layer').addEventListener('click', () => {
+                if (state.currentLayer < 4) { state.currentLayer++; updateLayerUI(); }
+            });
+            document.getElementById('btn-remove-layer').addEventListener('click', () => {
+                if (state.currentLayer > 0) { state.currentLayer--; updateLayerUI(); }
+            });
+            updateLayerUI();
+            updateSensorSimulation(); // Initialize sensor state
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (lidGroup) lidGroup.rotation.x = THREE.MathUtils.lerp(lidGroup.rotation.x, -state.lidAngle, 0.1);
+            if (backHatchGroup) backHatchGroup.rotation.x = THREE.MathUtils.lerp(backHatchGroup.rotation.x, -state.hatchAngle, 0.1);
+
+            if (frontSlatsGroup) {
+                const totalCount = frontSlatsGroup.children.length;
+                const liftCount = Math.floor(state.slatsLift * totalCount);
+                frontSlatsGroup.children.forEach(slat => {
+                    let targetY = slat.userData.index >= (totalCount - liftCount) ? slat.userData.baseY + 1.2 : slat.userData.baseY;
+                    slat.position.y = THREE.MathUtils.lerp(slat.position.y, targetY, 0.1);
+                });
+            }
+
+            if (binGroup) {
+                binGroup.children.forEach(child => {
+                    if (child.userData && child.userData.origPos && child.userData.dir) {
+                        const offset = child.userData.dir.clone().multiplyScalar(state.explodedFactor * 0.6);
+                        child.position.lerp(child.userData.origPos.clone().add(offset), 0.1);
+                    }
+                });
+            }
+
+            if (steamParticles) {
+                steamParticles.visible = state.showSteam && state.currentLayer > 0;
+                if (steamParticles.visible) {
+                    const pos = steamParticles.geometry.attributes.position.array;
+                    for (let i = 0; i < pos.length / 3; i++) {
+                        pos[i*3+1] += 0.003;
+                        if (pos[i*3+1] > 1.3) pos[i*3+1] = 0.8;
+                    }
+                    steamParticles.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+
+            if (compostLayers) {
+                compostLayers.forEach((layer, index) => {
+                    const isActive = state.showCompost && (index < state.currentLayer);
+                    const targetScale = isActive ? 1 : 0;
+                    
+                    // Smoothly animate the layer's thickness (growing/shrinking)
+                    layer.scale.y = THREE.MathUtils.lerp(layer.scale.y, targetScale, 0.15);
+                    
+                    // Optimization: Hide completely if scaled down to essentially zero
+                    layer.visible = layer.scale.y > 0.005;
+                });
+            }
+            
+            if (envGroup) envGroup.visible = state.showEnv;
+
+            controls.update();
+            renderer.render(scene, camera);
+            updateDimensionHUD();
+        }
+
+        function updateDimensionHUD() {
+            if (!state.showDimensions) return;
+            hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+            dimCallouts.forEach((item, index) => {
+                const label = document.getElementById(`dim-tag-${index}`);
+                if (!label) return;
+                const tempVec = item.pos.clone().project(camera);
+                if (tempVec.z > 1) { label.style.opacity = '0'; return; }
+                label.style.left = `${(tempVec.x * 0.5 + 0.5) * window.innerWidth}px`;
+                label.style.top = `${(-(tempVec.y * 0.5) + 0.5) * window.innerHeight}px`;
+                label.style.opacity = '1';
+            });
+        }
+    </script>
+</body>
+</html>
