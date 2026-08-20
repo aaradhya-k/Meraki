@@ -7,7 +7,7 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Three.js OrbitControls -->
@@ -32,6 +32,22 @@
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
         ::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.4); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, 0.7); }
+
+        /* Sidebar collapse/expand behavior — closed by default so the model is visible on small screens */
+        #sidebar {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        #sidebar.sidebar-closed {
+            transform: translateX(-115%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #sidebar-toggle {
+            transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        #sidebar-toggle:active {
+            transform: scale(0.94);
+        }
     </style>
 </head>
 <body class="h-full w-full select-none overflow-hidden bg-slate-950 text-slate-100">
@@ -86,8 +102,15 @@
         </div>
     </header>
 
+    <!-- Sidebar Toggle Button (floating, always visible; sidebar is closed by default) -->
+    <button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle controls panel" aria-expanded="false"
+        class="glass-panel fixed left-4 top-1/2 -translate-y-1/2 z-30 h-11 px-4 rounded-2xl flex items-center gap-2 text-amber-400 shadow-2xl hover:bg-slate-800/90 hover:text-amber-300 font-semibold text-sm whitespace-nowrap">
+        <i id="sidebar-toggle-icon" class="fa-solid fa-sliders text-sm"></i>
+        <span id="sidebar-toggle-label">Interact</span>
+    </button>
+
     <!-- Sidebar Controls Panel -->
-    <aside class="absolute left-4 top-24 bottom-6 z-20 w-80 max-w-[calc(100vw-2rem)] flex flex-col gap-3 pointer-events-none">
+    <aside id="sidebar" class="sidebar-closed absolute left-4 top-24 bottom-6 z-20 w-80 max-w-[calc(100vw-2rem)] flex flex-col gap-3 pointer-events-none">
         <div class="glass-panel rounded-2xl p-4 flex-1 flex flex-col gap-4 overflow-y-auto pointer-events-auto shadow-2xl">
             
             <!-- View Mode Presets -->
@@ -753,6 +776,18 @@
             camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             if (hudCanvas) { hudCanvas.width = window.innerWidth; hudCanvas.height = window.innerHeight; }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('sidebar-toggle');
+            const icon = document.getElementById('sidebar-toggle-icon');
+            const label = document.getElementById('sidebar-toggle-label');
+            const isClosed = sidebar.classList.toggle('sidebar-closed');
+            btn.setAttribute('aria-expanded', String(!isClosed));
+            icon.classList.toggle('fa-sliders', isClosed);
+            icon.classList.toggle('fa-xmark', !isClosed);
+            label.textContent = isClosed ? 'Interact' : 'Close';
         }
 
         function setCameraView(view) {
