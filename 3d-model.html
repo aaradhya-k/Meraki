@@ -9,9 +9,9 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <!-- Three.js Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
     <!-- Three.js OrbitControls -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <!-- Inter Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -293,6 +293,7 @@
         let dimensionLinesGroup, envGroup;
         let sensorGroup, sensorLightMat; // Added for sensor
         let hudCanvas, hudCtx;
+        let layerCallouts = []; // Stores the 3D positions for the layer labels
 
         // Interactive States
         const state = {
@@ -329,6 +330,7 @@
             buildBambooCompostBin();
             buildTemperatureSensor(); // Add sensor to scene
             setupDimensionLines();
+            setupLayerLabels(); // Initialize layer overlays
             setupEventListeners();
             animate();
         };
@@ -652,16 +654,17 @@
             });
             binGroup.add(lidGroup);
 
-            // 7. Compost Layers (4 Distinct Meshes)
+            // 7. Interactive Compost Layers (4 Distinct Meshes)
             const layerConfigs = [
-                { height: 0.15, material: twigMaterial },
-                { height: 0.10, material: greensMaterial },
-                { height: 0.15, material: brownsMaterial },
-                { height: 0.05, material: soilMaterial }
+                { height: 0.15, material: twigMaterial, name: "Layer 1: Branches", theme: "bg-amber-900/80 text-amber-200 border-amber-700 backdrop-blur-sm" },
+                { height: 0.10, material: greensMaterial, name: "Layer 2: Kitchen Waste", theme: "bg-green-900/80 text-green-300 border-green-700 backdrop-blur-sm" },
+                { height: 0.15, material: brownsMaterial, name: "Layer 3: Dry Leaves", theme: "bg-yellow-900/80 text-yellow-300 border-yellow-700 backdrop-blur-sm" },
+                { height: 0.05, material: soilMaterial, name: "Layer 4: Sprinkled Soil", theme: "bg-stone-900/80 text-stone-300 border-stone-700 backdrop-blur-sm" }
             ];
 
             let currentY = legHeight + 0.04;
             compostLayers = [];
+            layerCallouts = [];
             layerConfigs.forEach((config) => {
                 const geo = new THREE.BoxGeometry(totalWidth - 0.12, config.height, totalDepth - 0.12);
                 geo.translate(0, config.height / 2, 0); // Shift origin to bottom for upward scaling animation
@@ -670,6 +673,14 @@
                 lMesh.scale.y = 0; // Start scaled down (hidden)
                 lMesh.castShadow = true; lMesh.receiveShadow = true;
                 binGroup.add(lMesh); compostLayers.push(lMesh);
+                
+                // Track center-front position of each layer for the overlay labels
+                layerCallouts.push({
+                    pos: new THREE.Vector3(0, currentY + config.height, 0.54),
+                    text: config.name,
+                    theme: config.theme
+                });
+
                 currentY += config.height;
             });
 
@@ -694,7 +705,7 @@
             
             // Positioning on the right side of the bin, slightly lowered
             const posX = 0.6 + 0.02; // Just outside the right panel
-            const posY = 0.6;        // Mid-height
+            const posY = 0.85;       // Shifted up to clear the compost layers
             const posZ = 0;          // Center depth
             
             sensorGroup.position.set(posX, posY, posZ);
@@ -718,12 +729,12 @@
             ledMesh.position.set(0.03, 0.02, 0); // Stick out the right side of the box
             sensorGroup.add(ledMesh);
 
-            // 3. The long metal probe going INTO the compost
-            const probeGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.5, 8);
+            // 3. The shortened metal probe going INTO the compost
+            const probeGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.2, 8);
             const probeMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.3, metalness: 0.8 });
             const probe = new THREE.Mesh(probeGeo, probeMat);
             probe.rotation.z = Math.PI / 2;
-            probe.position.set(-0.25, 0, 0); // Extend inward (negative X)
+            probe.position.set(-0.1, 0, 0); // Extend inward (negative X)
             sensorGroup.add(probe);
             
             // Ensure sensor explodes outward with the side panel it's attached to
@@ -767,6 +778,26 @@
                 div.className = 'dim-label bg-amber-500/90 text-slate-950 font-bold text-[11px] px-2 py-0.5 rounded-full shadow-lg border border-amber-300';
                 div.id = `dim-tag-${index}`;
                 div.innerText = item.text;
+                container.appendChild(div);
+            });
+        }
+
+        function setupLayerLabels() {
+            let container = document.getElementById('layer-labels-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'layer-labels-container';
+                container.className = 'absolute inset-0 pointer-events-none z-10 overflow-hidden';
+                document.body.appendChild(container);
+            }
+            
+            layerCallouts.forEach((item, index) => {
+                const div = document.createElement('div');
+                // absolute positioning + center translation via CSS class 'dim-label'
+                div.className = `dim-label text-[10px] font-bold px-2.5 py-1 rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.5)] border ${item.theme} transition-opacity duration-300`;
+                div.id = `layer-tag-${index}`;
+                div.innerText = item.text;
+                div.style.opacity = '0';
                 container.appendChild(div);
             });
         }
@@ -816,17 +847,17 @@
             bambooMaterial.color.setHex(pal.main);
             bambooMaterial.roughness = pal.roughness;
             bambooMaterial.metalness = pal.metalness;
-            if (cornerMaterial) cornerMaterial.color.setHex(pal.main);
-            if (ventilatedBambooMaterial) ventilatedBambooMaterial.color.setHex(pal.main);
-            if (ventilatedFloorMaterial) ventilatedFloorMaterial.color.setHex(pal.main);
+            if (cornerMaterial) {
+                cornerMaterial.color.setHex(pal.main);
+            }
         }
 
         const layerDescriptions = [
             "<strong>Empty Bin</strong><br>Start building your compost pile from the bottom up!",
-            "<strong>Layer 1: The Twig Base</strong><br>10 to 15-centimetre layer of twigs, straw, or small branches to ensure drainage and airflow.",
-            "<strong>Layer 2: The Greens</strong><br>5 to 10-centimetre layer of wet, fresh kitchen and garden waste (veg scraps, fruit peels, fresh grass).",
-            "<strong>Layer 3: The Browns (Carbon)</strong><br>10 to 15-centimetre layer of dry, crunchy materials like dry leaves, shredded cardboard, and sawdust.",
-            "<strong>Layer 4: The Accelerator</strong><br>A thin layer of garden soil, finished compost, or a splash of water to introduce healthy bacteria."
+            "<strong>Layer 1: Branches</strong><br>10 to 15-centimetre layer of twigs, straw, or small branches at the very bottom.",
+            "<strong>Layer 2: Kitchen Waste</strong><br>5 to 10-centimetre layer of wet, fresh kitchen and garden waste. This includes vegetable scraps, fruit peels, coffee grounds, and fresh grass clippings.",
+            "<strong>Layer 3: Dry Leaves</strong><br>10 to 15-centimetre layer of dry, crunchy materials directly over the greens. This includes dry leaves, shredded cardboard, newspaper, and sawdust.",
+            "<strong>Layer 4: Sprinkled Soil</strong><br>A thin layer of garden soil, finished compost, or a splash of water over the browns. This introduces the healthy bacteria and fungi needed to kickstart the decomposition process."
         ];
 
         function updateLayerUI() {
@@ -1014,6 +1045,39 @@
             controls.update();
             renderer.render(scene, camera);
             updateDimensionHUD();
+            updateLayerHUD();
+        }
+
+        function updateLayerHUD() {
+            layerCallouts.forEach((item, index) => {
+                const labelElem = document.getElementById(`layer-tag-${index}`);
+                if (!labelElem) return;
+
+                // Only show if the compost is visible overall AND this specific layer has been built
+                const isVisible = state.showCompost && (index < state.currentLayer);
+                
+                if (!isVisible) {
+                    labelElem.style.opacity = '0';
+                    return;
+                }
+
+                // Project 3D coordinate to 2D screen coordinate
+                const tempVec = item.pos.clone();
+                tempVec.project(camera);
+
+                // Hide if behind the camera
+                if (tempVec.z > 1) {
+                    labelElem.style.opacity = '0';
+                    return;
+                }
+
+                const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(tempVec.y * 0.5) + 0.5) * window.innerHeight;
+
+                labelElem.style.left = `${x}px`;
+                labelElem.style.top = `${y}px`;
+                labelElem.style.opacity = '1';
+            });
         }
 
         function updateDimensionHUD() {
